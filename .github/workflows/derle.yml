@@ -2,7 +2,7 @@ name: Kartu Kata Turki
 
 on:
   push:
-    paths: ['kartu-kata-turki-app.zip']
+    paths: ['**.zip', '.github/workflows/derle.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,11 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Open the package
         run: |
+          # the newest zip in the repository, whatever its name (the phone may add " (1)")
+          Z=$(git log -1 --name-only --pretty=format: -- '*.zip' | grep -v '^$' | head -1)
+          if [ -z "$Z" ] || [ ! -f "$Z" ]; then Z=$(ls -1 *.zip | head -1); fi
+          echo "Package: $Z"
           rm -rf web build && mkdir web build
-          unzip -q kartu-kata-turki-app.zip -d web
+          unzip -q "$Z" -d web
           unzip -q web/android-project.zip -d build
           rm web/android-project.zip
 
