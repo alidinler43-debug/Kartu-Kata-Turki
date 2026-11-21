@@ -1,0 +1,79 @@
+name: Kartu Kata Turki
+
+on:
+  push:
+    paths: ['kartu-kata-turki-app.zip']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  KS_PASS: kartukataturki
+
+concurrency:
+  group: kartu-kata-turki
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open the package
+        run: |
+          rm -rf web build && mkdir web build
+          unzip -q kartu-kata-turki-app.zip -d web
+          unzip -q web/android-project.zip -d build
+          rm web/android-project.zip
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Signing key (made once, then kept)
+        run: |
+          if [ ! -f release.jks ]; then
+            keytool -genkeypair -keystore release.jks -alias kelime -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=Kartu Kata Turki"
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add release.jks
+            git commit -m "Signing key"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+          cp release.jks build/release.jks
+
+      - name: Build the APK
+        run: |
+          export VERSION_CODE=$((1000 + ${{ github.run_number }}))
+          cd build && gradle --no-daemon :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../KartuKataTurki.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Kartu Kata Turki ${{ github.run_number }}
+          files: KartuKataTurki.apk
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  web:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
